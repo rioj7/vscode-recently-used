@@ -1,0 +1,49 @@
+{
+  "name": "vscode-recently-used",
+  "displayName": "Recently Used",
+  "description": "Create a Recently Used arguments list for any command",
+  "version": "0.1.0",
+  "publisher": "rioj7",
+  "engines": { "vscode": "^1.62.0" },
+  "categories": ["Other"],
+  "keywords": ["recently","used","argument"],
+  "activationEvents": ["onCommand:recently-used.arguments"],
+  "license": "MIT",
+  "main": "./recently-used",
+  "browser": "./recently-used",
+  "icon": "assets/icon.png",
+  "contributes": {
+    "commands": [
+      {
+        "command": "recently-used.arguments",
+        "title": "Select command and recently used arguments",
+        "category": "Recently Used"
+      }
+    ],
+    "configuration": {
+      "title": "Recently Used",
+      "properties": {
+        "recently-used.arguments": {
+          "type": "object",
+          "default": {},
+          "description": "Commands and predefined arguments"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "recently-used.arguments",
+        "key": "ctrl+shift+alt+p",
+        "mac": "cmd+shift+alt+p"
+      }
+    ]
+  },
+  "repository": {
+    "url": "https://github.com/rioj7/vscode-recently-used.git",
+    "type": "git"
+  },
+  "bugs": {
+    "url": "https://github.com/rioj7/vscode-recently-used/issues"
+  },
+  "homepage": "https://github.com/rioj7/vscode-recently-used"
+}
