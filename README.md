@@ -32,7 +32,7 @@ All other keys in the object are the labels for the commands. An idea is to use 
 The value for a command label key is an object with the following properties:
 
 * `command` : `[string]` The commandID of the VSC command you want to execute. You can find it in the key bindings GUI if you search for the used Command Palette text (use context menu when found).
-* `args` : `[string|object|array|number|boolean]` The argument you want to pass to the `command`. You can construct any combination of the allowed types, like `array` of `object`s of `string`s. The strings are treated special. The string can contain any text and variables. All variables of the format: <code>&dollar;{recently:<em>name</em>}</code> are replaced by an item picked from the recently used list with that _`name`_. _`name`_ is a property of the `recently` property of this object (sibling of the `args` property). You can use multiple variables, in the same string or different strings.
+* `args` : `[string|object|array|number|boolean]` The argument you want to pass to the `command`. You can construct any combination of the allowed types, like `array` of `object`s of `string`s. The strings are treated special. The string can contain any text and [variables](#variable-substitution). All variables of the format: <code>&dollar;{recently:<em>name</em>}</code> are replaced by an item picked from the recently used list with that _`name`_. _`name`_ is a property of the `recently` property of this object (sibling of the `args` property). You can use multiple variables, in the same string or different strings.
 * `recently` : `[object]` (Optional) Contains the configuration of the  <code><em>name</em></code>d recently used lists used in the `args` property. The key of the object is the _`name`_ of the list. (default: `{}` all named lists are empty on start if not defined and used in another command)  
   The value for each key _`name`_ is an object with the properties:
 
@@ -44,6 +44,7 @@ The value for a command label key is an object with the following properties:
       * `label` : `[string]` (Optional) The label of the [QuickPickItem](https://code.visualstudio.com/api/references/vscode-api#QuickPickItem) shown. (default: same as `value`)
       * `description` : `[string]` (Optional) The description of the [QuickPickItem](https://code.visualstudio.com/api/references/vscode-api#QuickPickItem) shown.
       * `detail` : `[string]` (Optional) The detail of the [QuickPickItem](https://code.visualstudio.com/api/references/vscode-api#QuickPickItem) shown.
+      * `variableSubstValue` : `[boolean]` (Optional) do a variable substitution on **this** picked value. If the picked value contains a <code>&dollar;{recently:<em>name</em>}</code> variable it uses a recently used list as defined in the `initial` sibling property `recently` (default: `false`)
     * `string` is equivalent to
       ```json
       {
@@ -51,6 +52,8 @@ The value for a command label key is an object with the following properties:
         "value": "string-text"
       }
       ```
+  * `variableSubstValue` : `[boolean]` (Optional) do a variable substitution on the picked value. If the picked value contains a <code>&dollar;{recently:<em>name</em>}</code> variable it uses a recently used list as defined in the sibling property `recently` (default: `false`)
+  * `recently` : `[object]` (Optional) the definition of recently used list(s) in values of this list.
   * `new` : `[object]` (Optional) An object to configure the addition of a new item to the recently used list. (default: `{}`)  
     The object has the following properties:
     * `label` : `[string]` (Optional) The label to show at the end of the recently used item list. (default: `"-- new --"`)  
@@ -59,6 +62,78 @@ The value for a command label key is an object with the following properties:
     * `prompt` : `[string]` (Optional) The text under the [InputBox](https://code.visualstudio.com/api/references/vscode-api#InputBoxOptions) to add a new item. (default: <code>"Enter argument: <em>name</em>"</code>)
     * `title` : `[string]` (Optional) The text above the [InputBox](https://code.visualstudio.com/api/references/vscode-api#InputBoxOptions) to add a new item. (default: `undefined`)
     * `placeHolder` : `[string]` (Optional) The placeholder text shown in the [InputBox](https://code.visualstudio.com/api/references/vscode-api#InputBoxOptions) to add a new item. (default: `undefined`)
+
+## Variable Substitution
+
+At the following locations you can use variables:
+
+* in the `args` property of the command
+* in the values of a recently used list. You have to enable the variable substitution (`variableSubstValue`) on a particular element in the `initial` property or enable it for the whole recently used list. This also includes the new element values you add.
+
+The following variables are supported:
+
+* <code>&dollar;{command:<em>name</em>}</code> : use the result of a command as a variable. `name` can be a commandID or a _named argument object property_, named arguments are part of the `command` property (like `recently`).
+* <code>&dollar;{command:cv#<em>name</em>}</code> : if you want to use a variable with the _name_ supported by the extension [Command Variable](https://marketplace.visualstudio.com/items?itemName=rioj7.command-variable#variables) that does not need additional arguments like `${fileBasename}`. The variable value will be fetched with a call to `extension.commandvariable.transform`
+* <code>&dollar;{recently:<em>name</em>}</code> : use a picked item from the recently used list with the _name_ defined in the `recently` property (`args` sibling or `initial` sibling)
+
+The extension [Command Variable](https://marketplace.visualstudio.com/items?itemName=rioj7.command-variable#variables) implements a selection of variables we can get by using the command `extension.commandvariable.transform`. Many of the other commands of the extension could be useful.
+
+If you want to use the variable `${fileBasename}`:
+
+```json
+  "recently-used.arguments": {
+    "Compile a file" : {
+      "command": "workbench.action.terminal.sendSequence",
+      "args": { "text": "${recently:pickCommand} ${recently:pickFile}\u000D" },
+      "recently": {
+        "pickCommand": {
+          "prompt": "Pick Compiler",
+          "initial": [
+            { "label": "compile gcc -O2",
+              "value": "gcc -O2 -o myapp"
+            },
+            { "label": "compile clang",
+              "value": "clang -o myapp"
+            }
+          ]
+        },
+        "pickFile": {
+          "prompt": "Pick File",
+          "initial": [
+            { "label": "Current file",
+              "value": "${command:fileBasename}"
+            },
+            "hello-world.cpp"
+          ],
+          "variableSubstValue": true,
+          "command": {
+            "fileBasename": {
+              "command": "extension.commandvariable.transform",
+              "args": { "text": "${fileBasename}"}
+            }
+          }
+        }
+      }
+    }
+  }
+```
+
+Using <code>&dollar;{command:cv#<em>name</em>}</code> the `pickFile` recently used list can be shortened to
+
+```json
+        "pickFile": {
+          "prompt": "Pick File",
+          "initial": [
+            { "label": "Current file",
+              "value": "${command:cv#fileBasename}"
+            },
+            "hello-world.cpp"
+          ],
+          "variableSubstValue": true
+        }
+```
+
+## Examples
 
 The next example shows every possible property of the setting. For this command they are not all useful. Just delete the ones you don't like.
 
@@ -102,6 +177,65 @@ This is part of the `settings.json` file. The Global/User, Workspace or Folder v
           "new": {
             "label": "-- new tag --",
             "prompt": "Enter Tag"
+          }
+        }
+      }
+    }
+  }
+```
+
+You can perform variable substitution on the picked value. This allows recently used pick list of recently used pick lists.
+
+In the example we pick an animal breed, by first picking the type of animal, and then echo it on the terminal.
+
+```json
+  "recently-used.arguments": {
+    "Echo: an animal breed" : {
+      "command": "workbench.action.terminal.sendSequence",
+      "args": { "text": "echo \"${recently:pickAnimal}\"\u000D" },
+      "recently": {
+        "pickAnimal": {
+          "prompt": "Pick Animal",
+          "initial": [
+            { "label": "A dog ...",
+              "value": "${recently:pickDog}"
+            },
+            { "label": "A cat ...",
+              "value": "${recently:pickCat}"
+            },
+            { "label": "A snake ...",
+              "value": "${recently:pickSnake}"
+            }
+          ],
+          "variableSubstValue": true,
+          "recently": {
+            "pickDog": {
+              "prompt": "Pick Dog",
+              "initial": [
+                "Alaskan Malamute",
+                "Bernese Mountain",
+                "Golden Retriever",
+                "Tibetan Terrier"
+              ]
+            },
+            "pickCat": {
+              "prompt": "Pick Cat",
+              "initial": [
+                "Abyssinian",
+                "Bengal",
+                "Tonkinese",
+                "Toyger"
+              ]
+            },
+            "pickSnake": {
+              "prompt": "Pick Snake",
+              "initial": [
+                "Python",
+                "Asian Cobra",
+                "Coral snake",
+                "Sidewinder Rattlesnake"
+              ]
+            }
           }
         }
       }

@@ -2,7 +2,7 @@
   "name": "vscode-recently-used",
   "displayName": "Recently Used",
   "description": "Create a Recently Used arguments list for any command",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "rioj7",
   "engines": { "vscode": "^1.62.0" },
   "categories": ["Other"],

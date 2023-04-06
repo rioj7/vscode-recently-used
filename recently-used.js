@@ -15,6 +15,7 @@ class RecentlyUsed {
   constructQPItems(args) { return []; }
   /** @param {string} key @returns string */
   async transformKey(key) { return key; }
+  pickedItem(picked) { }
   async pickItem(args) {
     if (args === undefined) { return undefined; }
     let qpItems = this.constructQPItems(args);
@@ -26,8 +27,10 @@ class RecentlyUsed {
     qpItems.sort( (a, b) => sortIndex(a) - sortIndex(b) );
     let picked = await vscode.window.showQuickPick(qpItems, {ignoreFocusOut: true, title: getProperty(args, 'title'), placeHolder: getProperty(args, 'placeHolder')});
     if (!picked) { return undefined; }
+    // @ts-ignore : Property 'key' does not exist on type 'string'
     let key = await this.transformKey(picked.key);
     if (!key) { return undefined; }
+    this.pickedItem(picked);
     this.recentlyUsed = [key].concat(this.recentlyUsed.filter( e => e !== key ));
     return key;
   }
@@ -59,6 +62,7 @@ class RecentlyUsedInput extends RecentlyUsed {
     this.name = name;
     this.newProps = undefined;
     this.newLabel = undefined;
+    this.variableSubstValue = undefined;
   }
   constructQPItems(args) {
     let qpItems = [];
@@ -69,6 +73,7 @@ class RecentlyUsedInput extends RecentlyUsed {
       let label = undefined;
       let description = undefined;
       let detail = undefined;
+      let variableSubstValue = undefined;
       if (isString(item)) {
         key = item;
         label = item;
@@ -78,9 +83,10 @@ class RecentlyUsedInput extends RecentlyUsed {
         label = getProperty(item, 'label', key);
         description = getProperty(item, 'description');
         detail = getProperty(item, 'detail');
+        variableSubstValue = getProperty(item, 'variableSubstValue');
       }
       if (!key || !isString(key)) { continue; }
-      qpItems.push( { idx: qpItems.length, key, label, description, detail } );
+      qpItems.push( { idx: qpItems.length, key, label, description, detail, variableSubstValue } );
     }
     this.newProps = getProperty(args, 'new', {});
     this.newLabel = getProperty(this.newProps, 'label', '-- new --');
@@ -99,8 +105,10 @@ class RecentlyUsedInput extends RecentlyUsed {
       title: getProperty(this.newProps, 'title')
     });
   }
+  pickedItem(picked) { this.variableSubstValue = picked.variableSubstValue }
 }
 
+/** @type {Object.<string, RecentlyUsedInput>} */
 let recentlyUsedInputs = {};
 
 async function recently(args, name) {
@@ -109,7 +117,21 @@ async function recently(args, name) {
     recentlyUsed = new RecentlyUsedInput(name);
     recentlyUsedInputs[name] = recentlyUsed;
   }
-  return recentlyUsed.pickItem(args);
+  let result = await recentlyUsed.pickItem(args);
+  if (getProperty(args, 'variableSubstValue') || recentlyUsed.variableSubstValue) {
+    result = await variableSubstitution(result, args);
+  }
+  return result;
+}
+async function command(args) {
+  let command = getProperty(args, 'command');
+  if (!command) { return 'Unknown'; }
+  let command_args = getProperty(args, 'args');
+  if (getProperty(args, "variableSubstArgs")) {
+    command_args = await dataStructVariableSubstitution(command_args, args);
+    if (command_args === undefined) { return undefined; }
+  }
+  return vscode.commands.executeCommand(command, command_args);
 }
 
 async function asyncVariable(text, args, func) {
@@ -117,7 +139,17 @@ async function asyncVariable(text, args, func) {
   let asyncArgs = [];
   let varRE = new RegExp(`\\$\\{${func.name}:(.+?)\\}`, 'g');
   text = text.replace(varRE, (m, p1) => {
-    let deflt = {};
+    let deflt = undefined;
+    if (func.name === 'recently') { deflt = {}; }
+    if (func.name === 'command') {
+      deflt = { command: p1 };
+      if (p1.startsWith('cv#')) {
+        deflt = {
+          command: "extension.commandvariable.transform",
+          args: { text: "${" + p1.substring(3) + "}" }
+        };
+      }
+    }
     let nameArgs = getProperty(getProperty(args, func.name, {}), p1, deflt);
     if (!nameArgs) { return 'Unknown'; }
     asyncArgs.push([nameArgs, p1]);
@@ -138,6 +170,7 @@ async function variableSubstitution(text, args) {
   if (!isString(text)) { return text; }
   var result = text;
   result = await asyncVariable(result, args, recently);
+  result = await asyncVariable(result, args, command);
   if (result === undefined) { return undefined; }
   return result;
 };
